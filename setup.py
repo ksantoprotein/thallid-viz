@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
 
+import codecs
 import setuptools
 
-with open("README.md", "r") as fh:
+try:
+    codecs.lookup('mbcs')
+except LookupError:
+    ascii = codecs.lookup('ascii')
+    codecs.register(lambda name, enc=ascii: {True: enc}.get(name == 'mbcs'))
+
+with open('README.md', 'r', encoding = 'utf8') as fh:
 	long_description = fh.read()
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 setuptools.setup(
 	name = 'tvizbase',
@@ -12,7 +19,7 @@ setuptools.setup(
 	author = 'ksantoprotein',
 	author_email = 'ksantoprotein@rambler.ru',
 	description = 'Python library for VIZ',
-	long_description = long_description,
+	#long_description = long_description,
 	long_description_content_type = 'text/markdown',
 	url = 'https://github.com/ksantoprotein/thallid-viz',
 	#packages = setuptools.find_packages(),['tvizbase']
@@ -25,7 +32,6 @@ setuptools.setup(
 		'Programming Language :: Python :: 3',
 	],
 	install_requires=[
-		"graphenelib>=0.5.3",
 		"websocket-client",
 		"urllib3",
 		"ecdsa>=0.13",
