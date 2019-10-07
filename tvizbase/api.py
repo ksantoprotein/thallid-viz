@@ -433,7 +433,7 @@ class Api():
 		#Проверка существования логина
 		account = self.get_accounts([login])
 		if account:
-			public_key = account[0]["posting"]["key_auths"][0][0]
+			public_key = account[0]["memo_key"]
 			return(public_key)
 			
 		return False
