@@ -1,4 +1,4 @@
-# thallid-viz - Unofficial Python Library for VIZ
+# thallid-viz - Python Library for VIZ
 
 Thallid-VIZ библиотека для блокчейна VIZ
 
