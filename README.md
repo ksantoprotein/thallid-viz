@@ -44,3 +44,30 @@ wif = '5...'
 b4.transfer(to, amount, from_account, wif, memo = memo)
 
 ```
+
+#### Get_Dynamic_Global_Properties
+``` python
+from tvizbase.api import Api
+from pprint import pprint
+
+b4 = Api()
+
+tx = b4.get_dynamic_global_properties()
+pprint(tx)
+
+```
+
+#### Get_Accounts
+``` python
+from tvizbase.api import Api
+from pprint import pprint
+
+b4 = Api()
+
+accounts = ['ksantoprotein', 'sci-populi']
+tx = b4.get_accounts(accounts)
+for account in tx:
+	pprint(account)
+	input('next')
+
+```
