@@ -450,6 +450,14 @@ class Api():
 				return False
 			
 		return True
+		
+	def is_regular_key(self, login, public_key):
+		account = self.rpc.call('get_accounts', [login])
+		if account:
+			keys = [key for key, auth in account[0]["regular_authority"]["key_auths"]]
+			if public_key in keys:
+				return True
+		return False
 
 ########## BROADCAST #########
 
