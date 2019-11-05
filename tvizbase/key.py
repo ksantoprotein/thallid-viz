@@ -37,9 +37,9 @@ class Key():
 			#print(int(base58CheckDecode(private_key), 16))							# =>repr=>int 
 			#print(int(gphBase58CheckDecode(public_key[len(self.prefix):]), 16))	# =>repr=>int 
 			
-			print(role, self.get_public_from_private(keys["private"][role]))
+			#print(role, self.get_public_from_private(keys["private"][role]))
 			
-			print(self.is_key(keys["private"][role], keys["public"][role]))
+			#print(self.is_key(keys["private"][role], keys["public"][role]))
 			
 		return(keys)
 		
