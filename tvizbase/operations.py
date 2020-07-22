@@ -32,4 +32,9 @@ type_op = {
 	
 	"custom":	 					[['required_active_auths', ArrayString], ['required_regular_auths', ArrayString], 
 									['id', String], ['json', String]],
+									
+	"request_account_recovery ":	[['recovery_account', String], ['account_to_recover', String], ['new_master_authority', Permission], 
+									['extensions', Set]],
+	"recover_account":				[['account_to_recover', String], ['new_master_authority', Permission], ['recent_master_authority', Permission], 
+									['extensions', Set]],
 	}

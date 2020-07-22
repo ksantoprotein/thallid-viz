@@ -3,30 +3,32 @@
 from pprint import pprint
 import json
 import math
+import hashlib
 
+from .rpc_client import RpcClient
 from .ws_client import WsClient
+
 from .broadcast import Tx
 from .key import Key
-from .storage import time_format, asset_precision, rus_d, rus_list, prefix, fee, fee_asset, fee_delegation, fee_asset_delegation
+#from .storage import time_format, asset_precision, rus_d, rus_list, prefix, fee, fee_asset, fee_delegation, fee_asset_delegation
+from .storage import time_format, asset_precision, nodes, chain_id, prefix, fee, fee_asset, fee_delegation, fee_asset_delegation
 
 from datetime import datetime, timedelta
-
 from time import sleep, time
-
 from random import randint
 
 
 
 class Api():
 
+	app = 'thallid'
+
 	def __init__(self, **kwargs):
 
 		# Пользуемся своими нодами или новыми
-		nodes = kwargs.pop("nodes", None)
-		if nodes:
-			self.rpc = WsClient(nodes = nodes)
-		else:
-			self.rpc = WsClient()
+		report = kwargs.pop("report", False)
+		self.rpc = RpcClient(nodes=kwargs.pop("nodes", nodes), report=report)
+		#self.rpc = WsClient(nodes=kwargs.pop("nodes", nodes), report=report)
 
 		config_viz = self.rpc.call('get_config')
 		self.CHAIN_BANDWIDTH_PRECISION = int(config_viz["CHAIN_BANDWIDTH_PRECISION"])
@@ -44,9 +46,34 @@ class Api():
 		
 		self.key = Key()
 		
-		self.rus_d = rus_d
+		#self.rus_d = rus_d
 		
 		
+	##### ##### check ##### #####
+
+	def check_login(self, login):
+		if len(login) > 25: return False	#54321 скорректировать под параметр блокчейна в инициализации
+		if login[0] not in list('abcdefghijklmnopqrstuvwxyz'): return False
+		for l in list(login[1:]): 
+			if l not in list('abcdefghijklmnopqrstuvwxyz0123456789.-'): return False
+		return True
+
+	def check_account(self, login):			#Проверка существования логина
+		account = self.rpc.call('get_accounts', [login])
+		if account:
+			#public_key = account[0]["regular_authority"]["key_auths"][0][0]	#54321
+			return True
+		return False
+
+	def check_posting_key(self, login, public_key):
+		account = self.rpc.call('get_accounts', [login])
+		if account:
+			keys = [key for key, auth in account[0]["regular_authority"]["key_auths"]]
+			if public_key in keys: return True
+		return False
+
+	##### ##### ##### ##### #####
+	
 ######### API ##########
 
 ######### account_by_key #########
@@ -60,9 +87,10 @@ class Api():
 		'''
 		
 		res = self.rpc.call('get_key_references', [public_key])
-		if not res:
-			return([])
-		return(res[0])		# list
+		if res:
+			return(res[0])		# list
+		else:
+			return False
 		
 ######### account_history #########		
 		
@@ -114,49 +142,45 @@ class Api():
 			n += 1
 			print(start_block, 'scan', n * start_limit)
 	
-		return(raw)
+		return raw
 			
 ######### committee_api #########
 
 ######### database_api #########
 
-	def get_account_count(self):
-		# Возвращает количество зарегестрированных пользователей
+	def get_account_count(self):										# Возвращает количество зарегестрированных пользователей
 		return(int( self.rpc.call('get_account_count') ))
 	
-		
 	def get_accounts(self, logins, **kwargs):							#need correct
 	
 		'''
 		Перерасчитываются некоторые параметры по аккаунту
-		"VIZ", "SHARES" - ликвидные токены
+		"VIZ", "VP" - ликвидные токены
 		"bandwidth" = {	"avail" - всего доступно в кБ
 						"used" - использовано в кБ
 						"free" - доступно в кБ}
+		"TVALUE"	- максимальный авард при 100% энергии
+		"VALUE"		- текущий авард на макс энергии
+		"RVALUE"	- текущий авард на 1% от текущей энергии, по сути шаг стоимости
+		
+		TIP - текущая стоимость максимального аварда
+						
 		'''
 		
-		add_follow = kwargs.pop("follow", False)	###
-
 		accounts = self.rpc.call('get_accounts', logins)
 		info = self.get_dynamic_global_properties()
-		if not info:
-			print('error in global data')
-			return False
+		if not info: return False
 		
 		for account in accounts:
-
-			try:
-				# Определение SHARES
-				vesting_shares = float(str(account["vesting_shares"]).split()[0])
-				delegated = float(str(account["delegated_vesting_shares"]).split()[0])
-				received = float(str(account["received_vesting_shares"]).split()[0])
-				#account["SHARES"] = round( (vesting_shares + received - delegated) * info["viz_per_vests"], asset_precision["SHARES"])
-				account["SHARES"] = round( (vesting_shares + received - delegated), asset_precision["SHARES"])
-			except:
-				return False
+		
+			# Определение VP
+			vesting_shares = float(str(account["vesting_shares"]).split()[0])
+			delegated = float(str(account["delegated_vesting_shares"]).split()[0])
+			received = float(str(account["received_vesting_shares"]).split()[0])
+			#account["VP"] = round( (vesting_shares + received - delegated) * info["viz_per_vests"], asset_precision["SHARES"])
+			account["VP"] = round( (vesting_shares + received - delegated), asset_precision["SHARES"])
 
 			# Определение ликвидных токенов
-			
 			account["VIZ"] = float(str(account["balance"]).split()[0])
 
 			# Определение реальной энергии 1-10000
@@ -165,35 +189,14 @@ class Api():
 			age = (info["now"] - last_vote_time).total_seconds() / 1
 			actualVP = VP + (10000 * age / 432000)
 
-			#print(actualVP)
-			if actualVP > 10000:
-				account["power"] = 10000
-			else:
-				account["power"] = round(actualVP)
+			account["POWER"] = 10000 if actualVP > 10000 else round(actualVP)
 			
-			# Определение rshares
-			'''
-			vesting_shares = int(1e6 * account["golos_power"] / info["viz_per_vests"])
-			
-			max_vote_denom = info["vote_regeneration_per_day"] * (5 * 60 * 60 * 24) / (60 * 60 * 24)
-			used_power = int((account["voting_power"] + max_vote_denom - 1) / max_vote_denom)
-			rshares = ((vesting_shares * used_power) / 10000)
-			account["rshares"] = round(rshares)
-			account["add_reputation"] = round(rshares / 64)
-			'''
-			
-			# Определение стоимости апвота
-			account["TVALUE"] = round(100 * 10000 * account["SHARES"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
-			account["VALUE"] = round(100 * account["power"] * account["SHARES"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
-			account["RVALUE"] = round(account["power"] * account["SHARES"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
+			# Определение стоимости аварда
+			#account["TVALUE"] = round(100 * 10000 * account["VP"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
+			#account["VALUE"] = round(100 * account["POWER"] * account["VP"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
+			#account["RVALUE"] = round(account["POWER"] * account["VP"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
 			#info["viz_per_vests"]
-			'''
-			value_golos = round(account["rshares"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["GOLOS"])
-			value_gbg = round(value_golos * median_price, asset_precision["GBG"])
-			order_gbg = round(value_golos * order_price, asset_precision["GBG"])
-			account["value"] = {"GOLOS": value_golos, "GBG": value_gbg}
-			account["order"] = {"GOLOS": value_golos, "GBG": order_gbg}
-			'''
+			account["TIP"] = round(100 * account["POWER"] * account["VP"] * info["total_reward_fund"] / info["total_reward_shares"], asset_precision["SHARES"])
 					
 			# Определение update_account_bandwidth
 			# BANDWIDTH_RESERVE_PERCENT
@@ -204,17 +207,14 @@ class Api():
 			last_time = datetime.strptime(account["last_bandwidth_update"], time_format)
 			age_after = int((info["now"] - last_time).total_seconds() / 1)			# seconds
 			
-			if age_after >= average_seconds:
-				new_account_average_bandwidth = 0
-			else:
-				new_account_average_bandwidth = (((average_seconds - age_after) * average_bandwidth) / average_seconds)
+			new_account_average_bandwidth = 0 if age_after >= average_seconds else (((average_seconds - age_after) * average_bandwidth) / average_seconds)
 			
-			if account["SHARES"] < self.BANDWIDTH_RESERVE_BELOW / self.CHAIN_BANDWIDTH_PRECISION:		# 500 SHARES
+			if account["VP"] < self.BANDWIDTH_RESERVE_BELOW / self.CHAIN_BANDWIDTH_PRECISION:		# 500 SHARES
 				#account_vshares = info["total_vesting_shares"] * (self.BANDWIDTH_RESERVE_PERCENT / 10000) / info["bandwidth_reserve_candidates"]		# 10%
 				k = (self.BANDWIDTH_RESERVE_PERCENT / 10000) / info["bandwidth_reserve_candidates"]		# 10%
 			else:
-				#account_vshares = account["SHARES"] * (1 - (self.BANDWIDTH_RESERVE_PERCENT / 10000))		# -10%
-				k = (account["SHARES"] / info["total_vesting_shares"]) * (1 - (self.BANDWIDTH_RESERVE_PERCENT / 10000))		# -10%
+				#account_vshares = account["VP"] * (1 - (self.BANDWIDTH_RESERVE_PERCENT / 10000))		# -10%
+				k = (account["VP"] / info["total_vesting_shares"]) * (1 - (self.BANDWIDTH_RESERVE_PERCENT / 10000))		# -10%
 				
 			avail = k * max_virtual_bandwidth
 				
@@ -234,8 +234,11 @@ class Api():
 							"free": round(avail_kb - used_kb, 3),
 							}
 
-
-		return(accounts)
+		return accounts
+		
+		
+	def get_accounts_on_sale(self):
+		return self.rpc.call('get_accounts_on_sale', 1, 1000)
 		
 
 	def get_block(self, n):
@@ -426,39 +429,6 @@ class Api():
 		
 		
 
-######### differ #########
-		
-	def is_login(self, login):
-
-		#Проверка существования логина
-		account = self.get_accounts([login])
-		if account:
-			public_key = account[0]["memo_key"]
-			return(public_key)
-			
-		return False
-
-		
-	def check_login(self, login):
-
-		if len(login) > 25:	## скорректировать под параметр блокчейна в инициализации
-			return False
-		if login[0] not in list('abcdefghijklmnopqrstuvwxyz'):
-			return False
-		for l in list(login[1:]):
-			if l not in list('abcdefghijklmnopqrstuvwxyz0123456789.-'):
-				return False
-			
-		return True
-		
-	def is_regular_key(self, login, public_key):
-		account = self.rpc.call('get_accounts', [login])
-		if account:
-			keys = [key for key, auth in account[0]["regular_authority"]["key_auths"]]
-			if public_key in keys:
-				return True
-		return False
-
 ########## BROADCAST #########
 
 	def award(self, initiator, receiver, energy, wif, **kwargs):
@@ -477,7 +447,34 @@ class Api():
 			"custom_sequence": custom_sequence,
 			"memo": memo,
 			"beneficiaries": [],
-			#"beneficiaries": [{"account": 'ksantoprotein', "weight": 1000}],
+			}
+		ops.append(['award', op])
+		tx = self.finalizeOp(ops, wif)
+		return tx
+	
+	def tip(self, initiator, receiver, amount, wif, **kwargs):
+	
+		payload = self.get_accounts([initiator])[0]
+		
+		if amount > payload["TIP"]:
+			energy = payload["POWER"]
+		else:
+			energy = payload["POWER"] * (amount / payload["TIP"])
+
+		#asset = 'VIZ'
+		asset = self.fee_asset
+		
+		custom_sequence = kwargs.pop('custom_sequence', 0)
+		memo = kwargs.pop('memo', '')
+
+		ops = []
+		op = {
+			"initiator": initiator,
+			"receiver": receiver,
+			"energy": int(energy),
+			"custom_sequence": custom_sequence,
+			"memo": memo,
+			"beneficiaries": [],
 			}
 		ops.append(['award', op])
 		tx = self.finalizeOp(ops, wif)
@@ -630,7 +627,7 @@ class Api():
 		return tx
 
 		
-	def account_create(self, login, password, creator, wif, delegation = False, **kwargs):
+	def account_create(self, login, password, creator, wif, delegation=False, **kwargs):
 
 		# login = account name must be at most 25 chars long, check if account already exists
 		# roles = ["regular", "active", "memo", "master"]
@@ -649,10 +646,10 @@ class Api():
 		memo = paroles["public"]["memo"]
 		
 		owner_accounts_authority = []
-		#active_accounts_authority = [ [creator, 1] ]
-		#posting_accounts_authority = [ [creator, 1] ]
 		active_accounts_authority = []
 		posting_accounts_authority = []
+		#active_accounts_authority = [ [creator, 1] ]
+		#posting_accounts_authority = [ [creator, 1] ]
 		
 		#asset = 'VIZ'
 		asset = self.fee_asset

@@ -12,12 +12,24 @@ expiration = 60
 
 
 nodes = [
-		'wss://viz.lexa.host/ws'		### https://viz.lexa.host/	seed.viz.lexa.host:2001
+		#'wss://viz.lexa.host/ws'		### https://viz.lexa.host/	seed.viz.lexa.host:2001
 		
-		'wss://solox.world/ws',			### https://solox.world/
+		
+		#'wss://solox.world/ws',			### https://solox.world/
+		
+		'https://node.viz.cx',
+		'https://vizrpc.lexa.host',
+		'https://viz.lexai.host',
+		
+		'https://solox.world/',
+		'https://viz-node.dpos.space/',
+		'https://node.viz.plus/'
+		
+		#https://testnet.lexai.host
+		
 		#'https://solox.world/',		# old
 		
-		'wss://ws.viz.ropox.app',
+		#'wss://ws.viz.ropox.app',
 		
 		#'ws://37.192.123.64:9093',	# not full
 		
@@ -44,6 +56,7 @@ api_list = {
 			"database_api": [
 							'get_account_count',					# ok
 							'get_accounts',							# ok
+							'get_accounts_on_sale',
 							'get_block',							# ok
 							'get_block_header',						#
 							'get_chain_properties',					# ok
